@@ -9,7 +9,7 @@ compiler needed), making it the ideal stage0.
 
 Stages:
   stage0: GDC 10 (built from pkgsrc with C++ bootstrap, no D compiler needed)
-  stage1: GDC built with GDC 10 (TBD - intermediate version if needed)
+  stage1: GDC 12 (built from pkgsrc using GDC 10 as D bootstrap compiler)
   final:  GDC 15 (target)
 
 ## Prerequisites
@@ -64,15 +64,95 @@ do not affect functionality.
 - gcc10-libs must be installed alongside gcc10 (pkgsrc handles this
   automatically as a dependency).
 
-## Stage 1: Building an intermediate GDC (TBD)
+## Stage 1: Building GDC 12 from pkgsrc
 
-TODO: Determine if an intermediate GCC version (e.g., GCC 12 or 13) is
-needed between GDC 10 and GDC 15, or if GDC 15 can be built directly
-with GDC 10.
+GCC 12 (D frontend 2.100) serves as the intermediate step between GDC 10
+and GDC 15. The pkgsrc gcc12 package supports the `gcc-d` option and uses
+gcc10 as the D bootstrap compiler.
+
+### 1. Enable the D language option
+
+Add to /etc/mk.conf (if not already present):
+
+    PKG_OPTIONS.gcc12+= gcc-d
+
+### 2. Fix the GDC wrapper symlink (pkgsrc bug)
+
+The gcc12 pkgsrc package creates a `gdc` wrapper that points to gcc6's
+bin directory (the build compiler) instead of gcc10's. After `make`
+extracts sources and sets up wrappers, you must fix this before the
+configure step succeeds:
+
+    ls -la /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
+    # If it points to /usr/pkg/gcc6/bin/gdc (wrong), fix it:
+    rm /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
+    ln -s /usr/pkg/gcc10/bin/gdc /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
+
+Note: This must be done after `make` creates the work directory but
+before the configure step completes. If configure fails with
+"GDC is required to build d", apply this fix and re-run `make`.
+
+### 3. Fix LLVM libunwind header conflict
+
+If the LLVM `libunwind` package is installed, its `/usr/pkg/include/unwind.h`
+shadows GCC's own `unwind.h`, causing build failures in libgcc with errors
+about undefined `_Unwind_Ptr`, `_Unwind_Word`, etc.
+
+Temporarily move the conflicting headers before building:
+
+    mv /usr/pkg/include/unwind.h /usr/pkg/include/unwind.h.bak
+    mv /usr/pkg/include/__libunwind_config.h /usr/pkg/include/__libunwind_config.h.bak
+    mv /usr/pkg/include/libunwind.h /usr/pkg/include/libunwind.h.bak
+
+Restore them after the build completes:
+
+    mv /usr/pkg/include/unwind.h.bak /usr/pkg/include/unwind.h
+    mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
+    mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
+
+### 4. Fix static linking of libgcc_eh
+
+The gcc12 Makefile's BOOT_LDFLAGS uses `-static-libstdc++ -static-libgcc`
+but doesn't link `libgcc_eh`, causing undefined `_Unwind_*` symbol errors
+during the stage1 link. Edit `/usr/pkgsrc/lang/gcc12/Makefile`:
+
+    # Change this line:
+    BOOT_LDFLAGS=       -static-libstdc++ -static-libgcc ${LDFLAGS_FOR_TARGET}
+    # To:
+    BOOT_LDFLAGS=       -static-libstdc++ -static-libgcc -lgcc_eh ${LDFLAGS_FOR_TARGET}
+
+### 5. Build and install
+
+    cd /usr/pkgsrc/lang/gcc12
+    make                  # as root
+    make install          # as root
+
+Note: gcc6 will be built as a transitive dependency (from gcc10's
+buildlink3.mk). This adds significant build time but is automatic.
+
+This installs GDC 12 to /usr/pkg/gcc12/bin/gdc.
+
+### 6. Verify
+
+    /usr/pkg/gcc12/bin/gdc --version
+    # gdc (GCC) 12.5.0
+
+Test with a simple program:
+
+    /usr/pkg/gcc12/bin/gdc /tmp/hello.d -o /tmp/hello12 && /tmp/hello12
+
+### Known issues (stage1)
+
+- The same harmless linker warnings about compatibility time functions
+  appear as with stage0.
+- DWARF debug section warnings ("can't find .debug_ranges section") are
+  cosmetic and do not affect functionality.
+- The gcc6 transitive build dependency may fail to fetch isl-0.14.tar.bz2
+  from some mirrors; pkgsrc will retry alternate mirrors automatically.
 
 ## Final Stage: GDC 15 (TBD)
 
-TODO: Build GCC 15 with D frontend using the stage1 (or stage0) GDC.
+TODO: Build GCC 15 with D frontend using GDC 12 from stage1.
 
 ## Notes for AArch64 porting
 
