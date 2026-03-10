@@ -150,9 +150,116 @@ Test with a simple program:
 - The gcc6 transitive build dependency may fail to fetch isl-0.14.tar.bz2
   from some mirrors; pkgsrc will retry alternate mirrors automatically.
 
-## Final Stage: GDC 15 (TBD)
+## Final Stage: Building GDC 15 from pkgsrc
 
-TODO: Build GCC 15 with D frontend using GDC 12 from stage1.
+GCC 15 (GDC with D frontend 2.109+) is the target. The pkgsrc gcc15 package
+does NOT include a `gcc-d` option by default — it must be added manually.
+
+### 1. Add gcc-d option to the gcc15 pkgsrc package
+
+Edit `/usr/pkgsrc/lang/gcc15/options.mk`:
+
+a) Add `gcc-d` to `PKG_SUPPORTED_OPTIONS`:
+
+    # Change:
+    PKG_SUPPORTED_OPTIONS=  nls gcc-inplace-math gcc-c++ gcc-cobol gcc-fortran \
+    # To:
+    PKG_SUPPORTED_OPTIONS=  nls gcc-inplace-math gcc-c++ gcc-cobol gcc-d gcc-fortran \
+
+b) Append the D language block at the end of options.mk:
+
+    # GDC is required to build d, use GDC 12 as bootstrap compiler
+    .if !empty(PKG_OPTIONS:Mgcc-d)
+    LANGS+=		d
+    GCC_REQD=		12
+    _GCC_VARS+=		GDC
+    _GCC_GDC=		${_GCC_DIR}/bin/${_GCC_BIN_PREFIX}gdc${GCC_VERSION_SUFFIX}
+    _ALIASES.GDC=		gdc
+    .include "../../lang/gcc12/buildlink3.mk"
+    post-tools: ${_GCC_GDC}
+    .if !target(${_GCC_GDC})
+    ${_GCC_GDC}:
+    	${RUN}${MKDIR} ${.TARGET:H}
+    .    if !empty(COMPILER_USE_SYMLINKS:M[Yy][Ee][Ss])
+    	${RUN}${RM} -f ${.TARGET}
+    	${RUN}${LN} -s ${_GCCBINDIR}/${.TARGET:T} ${.TARGET}
+    .    else
+    	${RUN}                                  \
+    	(${ECHO} '#!${TOOLS_SHELL}';            \
+    	 ${ECHO} 'exec ${_GCCBINDIR}/${.TARGET:T} "$$@"'; \
+    	) > ${.TARGET}
+    	${RUN}${CHMOD} +x ${.TARGET}
+    .    endif
+    .    for _alias_ in ${_ALIASES.${_var}}
+    	${RUN}                                  \
+    	if [ ! -x "${.TARGET:H}/${_alias_}" ]; then \
+    		${LN} -f -s ${.TARGET:T} ${.TARGET:H}/${_alias_}; \
+    	fi
+    .    endfor
+    .endif
+    .endif
+
+### 2. Enable the D language option
+
+Add to /etc/mk.conf:
+
+    PKG_OPTIONS.gcc15+= gcc-d
+
+### 3. Fix the GDC wrapper symlink (same pkgsrc bug as stage1)
+
+After `make` extracts sources and sets up wrappers, check the symlink:
+
+    ls -la /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
+    # If it points to /usr/pkg/gcc6/bin/gdc (wrong), fix it:
+    rm /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
+    ln -s /usr/pkg/gcc12/bin/gdc /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
+
+### 4. Fix LLVM libunwind header conflict (same as stage1)
+
+    mv /usr/pkg/include/unwind.h /usr/pkg/include/unwind.h.bak
+    mv /usr/pkg/include/__libunwind_config.h /usr/pkg/include/__libunwind_config.h.bak
+    mv /usr/pkg/include/libunwind.h /usr/pkg/include/libunwind.h.bak
+
+Restore after the build completes.
+
+### 5. Fix static linking of libgcc_eh (same as stage1)
+
+Edit `/usr/pkgsrc/lang/gcc15/Makefile`:
+
+    # Change:
+    BOOT_LDFLAGS=       -static-libstdc++ -static-libgcc ${LDFLAGS_FOR_TARGET}
+    # To:
+    BOOT_LDFLAGS=       -static-libstdc++ -static-libgcc -lgcc_eh ${LDFLAGS_FOR_TARGET}
+
+### 6. Build and install
+
+    cd /usr/pkgsrc/lang/gcc15
+    make                  # as root; will fail at configure, fix symlink, re-run
+    make install          # as root
+
+Don't forget to restore the libunwind headers after install:
+
+    mv /usr/pkg/include/unwind.h.bak /usr/pkg/include/unwind.h
+    mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
+    mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
+
+### 7. Verify
+
+    /usr/pkg/gcc15/bin/gdc --version
+    # gdc (GCC) 15.2.0
+
+    /usr/pkg/gcc15/bin/gdc /tmp/hello.d -o /tmp/hello15 && /tmp/hello15
+    # Hello from GDC on NetBSD!
+
+### Known issues (final stage)
+
+- Same cosmetic linker warnings about compatibility time functions as earlier
+  stages.
+- DWARF warnings ("can't find .debug_ranges section") are cosmetic.
+- The gcc-d option does not exist in the stock pkgsrc gcc15 package and
+  must be added manually (step 1 above).
+- The GDC wrapper symlink bug persists from gcc12 — always check and fix
+  after the initial `make` run.
 
 ## Notes for AArch64 porting
 
