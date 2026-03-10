@@ -1,0 +1,84 @@
+# HOWTO: Porting GDC to NetBSD 10 (amd64)
+
+## Overview
+
+Bootstrapping GDC on NetBSD requires multiple stages because GDC (GCC's D
+compiler) generally needs a D compiler to build itself. GCC 10 is the last
+version whose D frontend can be built with only a C++ compiler (no prior D
+compiler needed), making it the ideal stage0.
+
+Stages:
+  stage0: GDC 10 (built from pkgsrc with C++ bootstrap, no D compiler needed)
+  stage1: GDC built with GDC 10 (TBD - intermediate version if needed)
+  final:  GDC 15 (target)
+
+## Prerequisites
+
+- NetBSD 10 amd64
+- pkgsrc tree at /usr/pkgsrc (comes with NetBSD)
+- pkgsrc bootstrapped (pkg_install, digest, etc.)
+
+## Stage 0: Building GDC 10 from pkgsrc
+
+GCC 10 is the last version whose D frontend includes a C++ fallback for
+bootstrapping. NetBSD pkgsrc has the `gcc-d` option for lang/gcc10.
+
+### 1. Enable the D language option
+
+Add to /etc/mk.conf:
+
+    PKG_OPTIONS.gcc10+= gcc-d
+
+Other useful settings:
+
+    MAKE_JOBS= 8          # parallel build (adjust to core count)
+
+### 2. Build and install
+
+    cd /usr/pkgsrc/lang/gcc10
+    make                  # as root, or with appropriate privileges
+    make install          # as root
+
+This installs GDC 10 to /usr/pkg/gcc10/bin/gdc.
+
+### 3. Verify
+
+    /usr/pkg/gcc10/bin/gdc --version
+    # gdc (GCC) 10.5.0 - D frontend version 2.076
+
+Test with a simple program:
+
+    cat > /tmp/hello.d << 'EOF'
+    import std.stdio;
+    void main() { writeln("Hello from GDC on NetBSD!"); }
+    EOF
+    /usr/pkg/gcc10/bin/gdc /tmp/hello.d -o /tmp/hello && /tmp/hello
+
+Note: You may see harmless linker warnings about compatibility references
+to nanosleep/clock_gettime/time. These are NetBSD compatibility shims and
+do not affect functionality.
+
+### Known issues (stage0)
+
+- The linker warnings about compatibility time functions are cosmetic only.
+- gcc10-libs must be installed alongside gcc10 (pkgsrc handles this
+  automatically as a dependency).
+
+## Stage 1: Building an intermediate GDC (TBD)
+
+TODO: Determine if an intermediate GCC version (e.g., GCC 12 or 13) is
+needed between GDC 10 and GDC 15, or if GDC 15 can be built directly
+with GDC 10.
+
+## Final Stage: GDC 15 (TBD)
+
+TODO: Build GCC 15 with D frontend using the stage1 (or stage0) GDC.
+
+## Notes for AArch64 porting
+
+- The same pkgsrc approach should work on NetBSD/aarch64.
+- Architecture-specific configure flags will differ (no --with-arch=nocona,
+  --with-tune=nocona, --with-fpmath=sse).
+- AArch64 may need different patches for D runtime/phobos (thread/fiber
+  support, signal handling).
+- Verify that libphobos has proper AArch64 support in the target GCC version.
