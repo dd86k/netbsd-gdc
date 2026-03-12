@@ -342,6 +342,8 @@ just libphobos without a full GCC rebuild:
   must be added manually (step 1 above).
 - The GDC wrapper symlink bug persists from gcc12 — always check and fix
   after the initial `make` run.
+- When using pkgin upgrade, it will overwrite our gcc binaries.
+  If you do update them, you will have to rebuild them.
 
 ## Notes for AArch64 porting
 
