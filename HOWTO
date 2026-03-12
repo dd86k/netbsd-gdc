@@ -10,13 +10,15 @@ compiler needed), making it the ideal stage0.
 Stages:
   stage0: GDC 10 (built from pkgsrc with C++ bootstrap, no D compiler needed)
   stage1: GDC 12 (built from pkgsrc using GDC 10 as D bootstrap compiler)
-  final:  GDC 15 (target)
+  final : GDC 15 (target)
 
 ## Prerequisites
 
 - NetBSD 10 amd64
 - pkgsrc tree at /usr/pkgsrc (comes with NetBSD)
 - pkgsrc bootstrapped (pkg_install, digest, etc.)
+- At least 3 GiB of memory, 4 GiB recommended
+- Obviously, the more cores you throw at it, the faster it will compile
 
 ## Stage 0: Building GDC 10 from pkgsrc
 
@@ -33,6 +35,14 @@ Other useful settings:
 
     MAKE_JOBS= 8          # parallel build (adjust to core count)
 
+In /usr/pkgsrc/lang/gcc10/options.mk:
+
+    PKG_SUPPORTED_OPTIONS= ... gcc-d
+    
+    .if !empty(PKG_OPTIONS:Mgcc-d)
+    LANGS+=			d
+    .endif
+
 ### 2. Build and install
 
     cd /usr/pkgsrc/lang/gcc10
@@ -40,6 +50,10 @@ Other useful settings:
     make install          # as root
 
 This installs GDC 10 to /usr/pkg/gcc10/bin/gdc.
+
+If digests fail (after modifying options), clean your work and retry:
+
+    make distclean && make checksum
 
 ### 3. Verify
 
@@ -50,17 +64,18 @@ Test with a simple program:
 
     cat > /tmp/hello.d << 'EOF'
     import std.stdio;
-    void main() { writeln("Hello from GDC on NetBSD!"); }
+    void main() { writeln("Hello!"); }
     EOF
     /usr/pkg/gcc10/bin/gdc /tmp/hello.d -o /tmp/hello && /tmp/hello
 
-Note: You may see harmless linker warnings about compatibility references
-to nanosleep/clock_gettime/time. These are NetBSD compatibility shims and
-do not affect functionality.
+Note: You may see linker warnings about compatibility references to
+nanosleep/clock_gettime/time. These are caused by NetBSD's ABI renames
+(see "libphobos patches" in the final stage section). They do not affect
+functionality but can be fixed with equivalent pragma(mangle) patches.
 
 ### Known issues (stage0)
 
-- The linker warnings about compatibility time functions are cosmetic only.
+- The linker warnings about compatibility time functions are cosmetic.
 - gcc10-libs must be installed alongside gcc10 (pkgsrc handles this
   automatically as a dependency).
 
@@ -76,41 +91,26 @@ Add to /etc/mk.conf (if not already present):
 
     PKG_OPTIONS.gcc12+= gcc-d
 
-### 2. Fix the GDC wrapper symlink (pkgsrc bug)
+GCC 12 already includes the gcc-d block with gcc10 as bootstrap, so there is no
+need to modify options.mk at all.
 
-The gcc12 pkgsrc package creates a `gdc` wrapper that points to gcc6's
-bin directory (the build compiler) instead of gcc10's. After `make`
-extracts sources and sets up wrappers, you must fix this before the
-configure step succeeds:
+### 2. Pre-build fixes
 
-    ls -la /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
-    # If it points to /usr/pkg/gcc6/bin/gdc (wrong), fix it:
-    rm /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
-    ln -s /usr/pkg/gcc10/bin/gdc /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
+Apply these fixes before running `make`:
 
-Note: This must be done after `make` creates the work directory but
-before the configure step completes. If configure fails with
-"GDC is required to build d", apply this fix and re-run `make`.
-
-### 3. Fix LLVM libunwind header conflict
+**a) Fix LLVM libunwind header conflict**
 
 If the LLVM `libunwind` package is installed, its `/usr/pkg/include/unwind.h`
 shadows GCC's own `unwind.h`, causing build failures in libgcc with errors
 about undefined `_Unwind_Ptr`, `_Unwind_Word`, etc.
 
-Temporarily move the conflicting headers before building:
+Temporarily move the conflicting headers:
 
     mv /usr/pkg/include/unwind.h /usr/pkg/include/unwind.h.bak
     mv /usr/pkg/include/__libunwind_config.h /usr/pkg/include/__libunwind_config.h.bak
     mv /usr/pkg/include/libunwind.h /usr/pkg/include/libunwind.h.bak
 
-Restore them after the build completes:
-
-    mv /usr/pkg/include/unwind.h.bak /usr/pkg/include/unwind.h
-    mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
-    mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
-
-### 4. Fix static linking of libgcc_eh
+**b) Fix static linking of libgcc_eh**
 
 The gcc12 Makefile's BOOT_LDFLAGS uses `-static-libstdc++ -static-libgcc`
 but doesn't link `libgcc_eh`, causing undefined `_Unwind_*` symbol errors
@@ -121,11 +121,38 @@ during the stage1 link. Edit `/usr/pkgsrc/lang/gcc12/Makefile`:
     # To:
     BOOT_LDFLAGS=       -static-libstdc++ -static-libgcc -lgcc_eh ${LDFLAGS_FOR_TARGET}
 
-### 5. Build and install
+### 3. Run make (first pass — will fail, this is expected)
 
     cd /usr/pkgsrc/lang/gcc12
-    make                  # as root
+    make                  # as root; let it run until it fails
+
+The build will fail at configure with a message like "GDC is required to
+build d". This is expected — pkgsrc created a `gdc` wrapper symlink but
+pointed it at gcc6 (the build compiler) instead of gcc10.
+
+### 4. Fix the GDC wrapper symlink (pkgsrc bug)
+
+    ls -la /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
+    # It will point to /usr/pkg/gcc6/bin/gdc (wrong). Fix it:
+    rm /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
+    # It may not even exist, that's okay, but this is important:
+    ln -s /usr/pkg/gcc10/bin/gdc /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
+
+If the symlink does not exist at all, `make` hasn't reached the
+wrapper-creation phase yet. Re-run `make` — it will create the symlink
+and then fail at configure, at which point you can apply the fix.
+
+### 5. Build and install (second pass)
+
+    cd /usr/pkgsrc/lang/gcc12
+    make                  # as root; resumes from where it failed
     make install          # as root
+
+Restore the libunwind headers after install:
+
+    mv /usr/pkg/include/unwind.h.bak /usr/pkg/include/unwind.h
+    mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
+    mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
 
 Note: gcc6 will be built as a transitive dependency (from gcc10's
 buildlink3.mk). This adds significant build time but is automatic.
@@ -143,8 +170,8 @@ Test with a simple program:
 
 ### Known issues (stage1)
 
-- The same harmless linker warnings about compatibility time functions
-  appear as with stage0.
+- The same linker warnings about compatibility time functions appear as
+  with stage0 (see "libphobos patches" in the final stage section).
 - DWARF debug section warnings ("can't find .debug_ranges section") are
   cosmetic and do not affect functionality.
 - The gcc6 transitive build dependency may fail to fetch isl-0.14.tar.bz2
@@ -207,12 +234,16 @@ Add to /etc/mk.conf:
 
 ### 3. Fix the GDC wrapper symlink (same pkgsrc bug as stage1)
 
-After `make` extracts sources and sets up wrappers, check the symlink:
+Same issue as stage1: the symlink only appears after `make` runs far
+enough to create wrappers, then fails at configure. Let `make` fail
+first, then fix the symlink:
 
     ls -la /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
-    # If it points to /usr/pkg/gcc6/bin/gdc (wrong), fix it:
+    # It will point to /usr/pkg/gcc6/bin/gdc (wrong). Fix it:
     rm /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
     ln -s /usr/pkg/gcc12/bin/gdc /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
+
+Then re-run `make` to continue.
 
 ### 4. Fix LLVM libunwind header conflict (same as stage1)
 
@@ -251,11 +282,57 @@ Don't forget to restore the libunwind headers after install:
     /usr/pkg/gcc15/bin/gdc /tmp/hello.d -o /tmp/hello15 && /tmp/hello15
     # Hello from GDC on NetBSD!
 
+### 8. Apply libphobos patches for NetBSD symbol renaming
+
+GDC 15 compiles and links correctly, but without patches, the linker emits
+warnings about compatibility symbols (nanosleep, clock_gettime, etc.).
+This is because NetBSD renamed many POSIX functions during its 64-bit
+time_t and statvfs ABI transitions (e.g. nanosleep -> __nanosleep50,
+statvfs -> __statvfs90). D's extern(C) bindings bypass C headers and
+resolve to the old compat stubs.
+
+The fix adds `pragma(mangle, "...")` annotations to the NetBSD sections
+of libphobos/libdruntime, using the same technique already used for Musl
+in these files.
+
+Copy the following patches into /usr/pkgsrc/lang/gcc15/patches/:
+
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_time.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_time.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_statvfs.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_stdc_time.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_select.d
+
+Then update the distinfo checksums:
+
+    cd /usr/pkgsrc/lang/gcc15
+    make makepatchsum
+
+Symbols fixed across these patches:
+  time.d:       clock_getres, clock_gettime, clock_settime, nanosleep,
+                timer_gettime, timer_settime, timegm, ctime_r, gmtime_r,
+                localtime_r
+  sys/time.d:   getitimer, gettimeofday, setitimer, utimes
+  statvfs.d:    statvfs, fstatvfs
+  stdc/time.d:  tzset
+  select.d:     pselect, select
+
+If you have already built gcc15 without these patches, you can rebuild
+just libphobos without a full GCC rebuild:
+
+    cd /usr/pkgsrc/lang/gcc15/work/build/x86_64--netbsd/libphobos
+    gmake -j8 clean
+    gmake -j8
+    gmake install            # as root
+
 ### Known issues (final stage)
 
-- Same cosmetic linker warnings about compatibility time functions as earlier
-  stages.
-- DWARF warnings ("can't find .debug_ranges section") are cosmetic.
+- Without the libphobos patches above, there are cosmetic linker warnings
+  about compatibility time functions; the patches eliminate them.
+- DWARF warnings ("can't find .debug_ranges section") are cosmetic and due
+  to DWARF5 and old binutils version. Use -gdwarf-4 to suppress.
+  This is not required with the final stage with libphobos patches, because
+  the compat module is no longer targeted.
 - The gcc-d option does not exist in the stock pkgsrc gcc15 package and
   must be added manually (step 1 above).
 - The GDC wrapper symlink bug persists from gcc12 — always check and fix
