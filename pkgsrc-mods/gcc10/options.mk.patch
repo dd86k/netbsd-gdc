@@ -1,0 +1,23 @@
+$NetBSD$
+
+Add support for D programming language
+
+--- pkgsrc/lang/gcc10/options.mk.orig	2026-02-02 13:45:14.705735384 -0800
++++ pkgsrc/lang/gcc10/options.mk	2026-02-02 13:46:40.870454370 -0800
+@@ -3,7 +3,7 @@
+ PKG_OPTIONS_VAR=	PKG_OPTIONS.${GCC_PKGNAME}
+ PKG_SUPPORTED_OPTIONS=	nls gcc-inplace-math gcc-c++ gcc-fortran \
+ 			gcc-go gcc-objc gcc-objc++ gcc-graphite \
+-			always-libgcc
++			always-libgcc gcc-d
+ PKG_SUGGESTED_OPTIONS=	gcc-c++ gcc-fortran gcc-objc gcc-objc++ \
+ 			gcc-graphite gcc-inplace-math
+ 
+@@ -162,3 +162,7 @@
+ CONFIGURE_ARGS+=	--disable-build-with-cxx
+ CONFIGURE_ARGS+=	--disable-build-poststage1-with-cxx
+ .endif
++
++.if !empty(PKG_OPTIONS:Mgcc-d)
++LANGS+=			d
++.endif
