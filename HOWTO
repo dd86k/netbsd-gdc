@@ -17,8 +17,10 @@ Stages:
 - NetBSD 10 amd64
 - pkgsrc tree at /usr/pkgsrc (comes with NetBSD)
 - pkgsrc bootstrapped (pkg_install, digest, etc.)
+- At least 8 GiB of available disk space, I believe
 - At least 3 GiB of memory, 4 GiB recommended
 - Obviously, the more cores you throw at it, the faster it will compile
+- Tested with pkgsrc-2025Q4
 
 ## Stage 0: Building GDC 10 from pkgsrc
 
@@ -73,6 +75,9 @@ nanosleep/clock_gettime/time. These are caused by NetBSD's ABI renames
 (see "libphobos patches" in the final stage section). They do not affect
 functionality but can be fixed with equivalent pragma(mangle) patches.
 
+To reclaim some space, feel free to invoke 'make clean' in
+/usr/pkgsrc/lang/gcc10.
+
 ### Known issues (stage0)
 
 - The linker warnings about compatibility time functions are cosmetic.
@@ -98,7 +103,7 @@ need to modify options.mk at all.
 
 Apply these fixes before running `make`:
 
-**a) Fix LLVM libunwind header conflict**
+a) Fix LLVM libunwind header conflict
 
 If the LLVM `libunwind` package is installed, its `/usr/pkg/include/unwind.h`
 shadows GCC's own `unwind.h`, causing build failures in libgcc with errors
@@ -110,7 +115,7 @@ Temporarily move the conflicting headers:
     mv /usr/pkg/include/__libunwind_config.h /usr/pkg/include/__libunwind_config.h.bak
     mv /usr/pkg/include/libunwind.h /usr/pkg/include/libunwind.h.bak
 
-**b) Fix static linking of libgcc_eh**
+b) Fix static linking of libgcc_eh
 
 The gcc12 Makefile's BOOT_LDFLAGS uses `-static-libstdc++ -static-libgcc`
 but doesn't link `libgcc_eh`, causing undefined `_Unwind_*` symbol errors
