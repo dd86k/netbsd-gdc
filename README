@@ -1,0 +1,10 @@
+This repository is work on progress on how to compile GDC, the GNU D Compiler,
+on NetBSD 10.
+
+Tested on amd64 with pkgsrc-2025Q4.
+
+Structure:
+- HOWTO contains the instructions.
+- patches/ contains patches for libphobos-libdruntime.
+  - I have submitted patches to Druntime (see dlang/dmd#22720).
+- pkgsrc-mods/ contains modifications to the pkgsrc files.
