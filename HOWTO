@@ -18,9 +18,14 @@ Stages:
 - pkgsrc tree at /usr/pkgsrc (comes with NetBSD)
 - pkgsrc bootstrapped (pkg_install, digest, etc.)
 - At least 8 GiB of available disk space, I believe
-- At least 3 GiB of memory, 4 GiB recommended
+- 4 GiB recommended, 6 GiB for final stage
 - Obviously, the more cores you throw at it, the faster it will compile
 - Tested with pkgsrc-2025Q4
+
+## Notes
+
+- If the process gets OOM'd, run 'make clean' and restart your build.
+  You will have to redo your symlinks.
 
 ## Stage 0: Building GDC 10 from pkgsrc
 
