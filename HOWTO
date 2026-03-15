@@ -191,12 +191,7 @@ does NOT include a `gcc-d` option by default — it must be added manually.
 
 Edit `/usr/pkgsrc/lang/gcc15/options.mk`:
 
-a) Add `gcc-d` to `PKG_SUPPORTED_OPTIONS`:
-
-    # Change:
-    PKG_SUPPORTED_OPTIONS=  nls gcc-inplace-math gcc-c++ gcc-cobol gcc-fortran \
-    # To:
-    PKG_SUPPORTED_OPTIONS=  nls gcc-inplace-math gcc-c++ gcc-cobol gcc-d gcc-fortran \
+a) Add `gcc-d` to `PKG_SUPPORTED_OPTIONS`.
 
 b) Append the D language block at the end of options.mk:
 
@@ -237,7 +232,19 @@ Add to /etc/mk.conf:
 
     PKG_OPTIONS.gcc15+= gcc-d
 
-### 3. Fix the GDC wrapper symlink (same pkgsrc bug as stage1)
+### 3. Compile pkgtools/cwrappers
+
+GCC 15 requires cwrappers.
+
+# cd /usr/pkgsrc/pkgtools/cwrappers
+# make && make install
+===> Installing binary package of cwrapper-20220403
+
+Done. I believe only "make install" is enough.
+
+Should be ready to make GCC 15.
+
+### 4. Fix the GDC wrapper symlink (same pkgsrc bug as stage1)
 
 Same issue as stage1: the symlink only appears after `make` runs far
 enough to create wrappers, then fails at configure. Let `make` fail
@@ -250,7 +257,7 @@ first, then fix the symlink:
 
 Then re-run `make` to continue.
 
-### 4. Fix LLVM libunwind header conflict (same as stage1)
+### 5. Fix LLVM libunwind header conflict (same as stage1)
 
     mv /usr/pkg/include/unwind.h /usr/pkg/include/unwind.h.bak
     mv /usr/pkg/include/__libunwind_config.h /usr/pkg/include/__libunwind_config.h.bak
@@ -258,7 +265,7 @@ Then re-run `make` to continue.
 
 Restore after the build completes.
 
-### 5. Fix static linking of libgcc_eh (same as stage1)
+### 6. Fix static linking of libgcc_eh (same as stage1)
 
 Edit `/usr/pkgsrc/lang/gcc15/Makefile`:
 
@@ -267,7 +274,7 @@ Edit `/usr/pkgsrc/lang/gcc15/Makefile`:
     # To:
     BOOT_LDFLAGS=       -static-libstdc++ -static-libgcc -lgcc_eh ${LDFLAGS_FOR_TARGET}
 
-### 6. Build and install
+### 7. Build and install
 
     cd /usr/pkgsrc/lang/gcc15
     make                  # as root; will fail at configure, fix symlink, re-run
@@ -279,7 +286,7 @@ Don't forget to restore the libunwind headers after install:
     mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
     mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
 
-### 7. Verify
+### 8. Verify
 
     /usr/pkg/gcc15/bin/gdc --version
     # gdc (GCC) 15.2.0
@@ -287,7 +294,7 @@ Don't forget to restore the libunwind headers after install:
     /usr/pkg/gcc15/bin/gdc /tmp/hello.d -o /tmp/hello15 && /tmp/hello15
     # Hello from GDC on NetBSD!
 
-### 8. Apply libphobos patches for NetBSD symbol renaming
+### 9. Apply libphobos patches for NetBSD symbol renaming
 
 GDC 15 compiles and links correctly, but without patches, the linker emits
 warnings about compatibility symbols (nanosleep, clock_gettime, etc.).
