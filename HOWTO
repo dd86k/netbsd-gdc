@@ -192,7 +192,17 @@ Test with a simple program:
 GCC 15 (GDC with D frontend 2.109+) is the target. The pkgsrc gcc15 package
 does NOT include a `gcc-d` option by default — it must be added manually.
 
-### 1. Add gcc-d option to the gcc15 pkgsrc package
+Do all preparation steps (1–6) before running `make` for the first time.
+The only step that requires a failed `make` is the symlink fix (step 7).
+
+### 1. Compile pkgtools/cwrappers
+
+GCC 15 requires cwrappers:
+
+    cd /usr/pkgsrc/pkgtools/cwrappers
+    make install              # as root
+
+### 2. Add gcc-d option to the gcc15 pkgsrc package
 
 Edit `/usr/pkgsrc/lang/gcc15/options.mk`:
 
@@ -231,46 +241,13 @@ b) Append the D language block at the end of options.mk:
     .endif
     .endif
 
-### 2. Enable the D language option
+### 3. Enable the D language option
 
 Add to /etc/mk.conf:
 
     PKG_OPTIONS.gcc15+= gcc-d
 
-### 3. Compile pkgtools/cwrappers
-
-GCC 15 requires cwrappers.
-
-# cd /usr/pkgsrc/pkgtools/cwrappers
-# make && make install
-===> Installing binary package of cwrapper-20220403
-
-Done. I believe only "make install" is enough.
-
-Should be ready to make GCC 15.
-
-### 4. Fix the GDC wrapper symlink (same pkgsrc bug as stage1)
-
-Same issue as stage1: the symlink only appears after `make` runs far
-enough to create wrappers, then fails at configure. Let `make` fail
-first, then fix the symlink:
-
-    ls -la /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
-    # It will point to /usr/pkg/gcc6/bin/gdc (wrong). Fix it:
-    rm /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
-    ln -s /usr/pkg/gcc12/bin/gdc /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
-
-Then re-run `make` to continue.
-
-### 5. Fix LLVM libunwind header conflict (same as stage1)
-
-    mv /usr/pkg/include/unwind.h /usr/pkg/include/unwind.h.bak
-    mv /usr/pkg/include/__libunwind_config.h /usr/pkg/include/__libunwind_config.h.bak
-    mv /usr/pkg/include/libunwind.h /usr/pkg/include/libunwind.h.bak
-
-Restore after the build completes.
-
-### 6. Fix static linking of libgcc_eh (same as stage1)
+### 4. Fix static linking of libgcc_eh
 
 Edit `/usr/pkgsrc/lang/gcc15/Makefile`:
 
@@ -279,34 +256,22 @@ Edit `/usr/pkgsrc/lang/gcc15/Makefile`:
     # To:
     BOOT_LDFLAGS=       -static-libstdc++ -static-libgcc -lgcc_eh ${LDFLAGS_FOR_TARGET}
 
-### 7. Build and install
+### 5. Fix LLVM libunwind header conflict
 
-    cd /usr/pkgsrc/lang/gcc15
-    make                  # as root; will fail at configure, fix symlink, re-run
-    make install          # as root
+If the LLVM `libunwind` package is installed, its `/usr/pkg/include/unwind.h`
+shadows GCC's own `unwind.h`, causing build failures in libgcc. Temporarily
+move the conflicting headers:
 
-Don't forget to restore the libunwind headers after install:
+    mv /usr/pkg/include/unwind.h /usr/pkg/include/unwind.h.bak
+    mv /usr/pkg/include/__libunwind_config.h /usr/pkg/include/__libunwind_config.h.bak
+    mv /usr/pkg/include/libunwind.h /usr/pkg/include/libunwind.h.bak
 
-    mv /usr/pkg/include/unwind.h.bak /usr/pkg/include/unwind.h
-    mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
-    mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
+### 6. Apply libphobos patches for NetBSD symbol renaming
 
-### 8. Verify
-
-    /usr/pkg/gcc15/bin/gdc --version
-    # gdc (GCC) 15.2.0
-
-    /usr/pkg/gcc15/bin/gdc /tmp/hello.d -o /tmp/hello15 && /tmp/hello15
-    # Hello from GDC on NetBSD!
-
-### 9. Apply libphobos patches for NetBSD symbol renaming
-
-GDC 15 compiles and links correctly, but without patches, the linker emits
-warnings about compatibility symbols (nanosleep, clock_gettime, etc.).
-This is because NetBSD renamed many POSIX functions during its 64-bit
-time_t and statvfs ABI transitions (e.g. nanosleep -> __nanosleep50,
-statvfs -> __statvfs90). D's extern(C) bindings bypass C headers and
-resolve to the old compat stubs.
+NetBSD renamed many POSIX functions during its 64-bit time_t and statvfs
+ABI transitions (e.g. nanosleep -> __nanosleep50, statvfs -> __statvfs90).
+D's extern(C) bindings bypass C headers and resolve to the old compat
+stubs, causing linker warnings and incorrect runtime behavior.
 
 The fix adds `pragma(mangle, "...")` annotations to the NetBSD sections
 of libphobos/libdruntime, using the same technique already used for Musl
@@ -334,26 +299,57 @@ Symbols fixed across these patches:
   stdc/time.d:  tzset
   select.d:     pselect, select
 
-If you have already built gcc15 without these patches, you can rebuild
-just libphobos without a full GCC rebuild:
+### 7. First make run (will fail — fix GDC wrapper symlink)
+
+    cd /usr/pkgsrc/lang/gcc15
+    make                      # as root; will fail at configure
+
+The build fails because pkgsrc creates a `gdc` wrapper symlink pointing
+at gcc6 (the build compiler) instead of gcc12. Fix it:
+
+    ls -la /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
+    # It will point to /usr/pkg/gcc6/bin/gdc (wrong). Fix it:
+    rm /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
+    ln -s /usr/pkg/gcc12/bin/gdc /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
+
+### 8. Build and install
+
+    cd /usr/pkgsrc/lang/gcc15
+    make                      # as root; resumes from where it left off
+    make install              # as root
+
+Restore the libunwind headers after install:
+
+    mv /usr/pkg/include/unwind.h.bak /usr/pkg/include/unwind.h
+    mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
+    mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
+
+### 9. Verify
+
+    /usr/pkg/gcc15/bin/gdc --version
+    # gdc (GCC) 15.2.0
+
+    /usr/pkg/gcc15/bin/gdc /tmp/hello.d -o /tmp/hello15 && /tmp/hello15
+    # Hello from GDC on NetBSD!
+
+Note: If you have already built gcc15 without the libphobos patches, you
+can rebuild just libphobos without a full GCC rebuild:
 
     cd /usr/pkgsrc/lang/gcc15/work/build/x86_64--netbsd/libphobos
     gmake -j8 clean
     gmake -j8
-    gmake install            # as root
+    gmake install             # as root
 
 ### Known issues (final stage)
 
-- Without the libphobos patches above, there are cosmetic linker warnings
-  about compatibility time functions; the patches eliminate them.
 - DWARF warnings ("can't find .debug_ranges section") are cosmetic and due
   to DWARF5 and old binutils version. Use -gdwarf-4 to suppress.
   This is not required with the final stage with libphobos patches, because
   the compat module is no longer targeted.
 - The gcc-d option does not exist in the stock pkgsrc gcc15 package and
-  must be added manually (step 1 above).
+  must be added manually (step 2 above).
 - The GDC wrapper symlink bug persists from gcc12 — always check and fix
-  after the initial `make` run.
+  after the initial `make` run (step 7).
 - When using pkgin upgrade, it will overwrite our gcc binaries.
   If you do update them, you will have to rebuild them.
 
