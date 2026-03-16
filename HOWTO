@@ -284,13 +284,16 @@ Copy the following patches into /usr/pkgsrc/lang/gcc15/patches/:
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_statvfs.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_stdc_time.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_select.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_types.d
 
 Then update the distinfo checksums:
 
     cd /usr/pkgsrc/lang/gcc15
     make makepatchsum
 
-Symbols fixed across these patches:
+a) Symbol renaming (pragma mangle) — these patches fix extern(C) bindings
+   that bypass C header __RENAME() macros:
+
   time.d:       clock_getres, clock_gettime, clock_settime, nanosleep,
                 timer_gettime, timer_settime, timegm, ctime_r, gmtime_r,
                 localtime_r
@@ -298,6 +301,18 @@ Symbols fixed across these patches:
   statvfs.d:    statvfs, fstatvfs
   stdc/time.d:  tzset
   select.d:     pselect, select
+
+b) Type fixes (sys/types.d) — NetBSD's 64-bit time_t ABI transition also
+   means the POSIX type aliases in druntime are wrong:
+
+  time_t:       c_long -> long  (NetBSD: __int64_t, always 64-bit)
+  clock_t:      c_long -> uint  (NetBSD: unsigned int)
+  suseconds_t:  c_long -> int   (NetBSD: int)
+
+   On LP64 (amd64), c_long happens to be 64-bit so time_t was the right
+   size by accident. On ILP32 or AArch64-ILP32, c_long would be 32-bit
+   while NetBSD's time_t is unconditionally 64-bit — this patch makes it
+   correct regardless of data model.
 
 ### 7. First make run (will fail — fix GDC wrapper symlink)
 
