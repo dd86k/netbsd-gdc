@@ -368,6 +368,123 @@ can rebuild just libphobos without a full GCC rebuild:
 - When using pkgin upgrade, it will overwrite our gcc binaries.
   If you do update them, you will have to rebuild them.
 
+## Post-install: gdmd and DUB
+
+Once GDC 15 is installed, you can set up gdmd (DMD-compatible wrapper) and
+DUB (D package manager/build tool). Both are installed into /usr/pkg/gcc15/bin/.
+
+Add /usr/pkg/gcc15/bin to your PATH to use them:
+
+    export PATH=/usr/pkg/gcc15/bin:$PATH
+
+### gdmd
+
+gdmd is a Perl script that translates DMD command-line flags to GDC flags,
+allowing tools that expect DMD-style invocation (like DUB's build system)
+to work with GDC.
+
+Source: https://github.com/D-Programming-GDC/gdmd (the `dmd-script` file)
+
+#### 1. Download and install
+
+    curl -L -o /tmp/gdmd-repo.tar.gz \
+        https://github.com/D-Programming-GDC/gdmd/archive/refs/heads/master.tar.gz
+    cd /tmp && tar xzf gdmd-repo.tar.gz
+
+    # As root:
+    cp /tmp/gdmd-master/dmd-script /usr/pkg/gcc15/bin/gdmd
+    chmod +x /usr/pkg/gcc15/bin/gdmd
+
+#### 2. Fix the Perl shebang
+
+NetBSD pkgsrc installs Perl to /usr/pkg/bin/perl, not /usr/bin/perl:
+
+    # As root:
+    sed -i "1s|/usr/bin/perl|/usr/pkg/bin/perl|" /usr/pkg/gcc15/bin/gdmd
+
+#### 3. Verify
+
+    /usr/pkg/gcc15/bin/gdmd --version
+    # gdc (GCC) 15.2.0
+
+    /usr/pkg/gcc15/bin/gdmd /tmp/hello.d -of/tmp/hello_gdmd && /tmp/hello_gdmd
+
+### DUB
+
+DUB is the D package manager and build tool. It must be bootstrapped from
+source since no prebuilt binary exists for NetBSD.
+
+Source: https://github.com/dlang/dub
+
+#### 1. Download
+
+    curl -L -o dub-v1.41.0.tar.gz \
+        https://github.com/dlang/dub/archive/refs/tags/v1.41.0.tar.gz
+    tar xzf dub-v1.41.0.tar.gz
+    cd dub-1.41.0
+
+(Adjust version as needed. The build.sh script requires bash which is not
+available by default on NetBSD, so we compile directly with gdmd.)
+
+#### 2. Generate version file
+
+    mkdir -p source/dub bin
+    cat > source/dub/version_.d << 'EOF'
+    module dub.version_;
+    enum dubVersion = "v1.41.0";
+    EOF
+
+#### 3. Create the dirfd shim
+
+NetBSD defines `dirfd` as a macro, not a function. The D runtime declares
+it as `extern(C)`, causing an undefined reference at link time. A small C
+shim is needed:
+
+    cat > /tmp/netbsd_shims.c << 'EOF'
+    #include <dirent.h>
+    #undef dirfd
+    int dirfd(DIR *dirp) {
+        return dirp->dd_fd;
+    }
+    EOF
+    /usr/pkg/gcc15/bin/gcc -c /tmp/netbsd_shims.c -o /tmp/netbsd_shims.o
+
+#### 4. Compile DUB
+
+    /usr/pkg/gcc15/bin/gdmd \
+        -of"bin/dub" -I"source" \
+        -version=DubUseCurl -version=DubApplication \
+        -g -O -w \
+        -L/tmp/netbsd_shims.o \
+        -L-lcurl -L-L/usr/pkg/lib -L-R/usr/pkg/lib \
+        @build-files.txt
+
+The `-R/usr/pkg/lib` flag embeds the rpath so DUB can find libcurl.so at
+runtime without setting LD_LIBRARY_PATH.
+
+Linker warnings about compatibility references to socket() and getpwuid()
+are cosmetic and do not affect functionality.
+
+#### 5. Install and verify
+
+    # As root:
+    cp bin/dub /usr/pkg/gcc15/bin/dub
+
+    /usr/pkg/gcc15/bin/dub --version
+    # DUB version 1.41.0, built on ...
+
+### Known issues (gdmd/DUB)
+
+- The `dirfd` shim is needed because NetBSD's dirent.h defines dirfd as a
+  macro rather than a function. This affects any D program that uses
+  std.process (which internally calls dirfd via the D runtime).
+- The socket() and getpwuid() linker warnings are the same NetBSD ABI
+  rename issue described in the libphobos patches section. They are cosmetic
+  for DUB's use case.
+- DUB requires libcurl (install via pkgsrc: `cd /usr/pkgsrc/www/curl && make install`).
+- bash is not installed by default on NetBSD, so the DUB build.sh script
+  cannot be used directly. The gdmd invocation above bypasses it.
+
 ## Notes for AArch64 porting
 
 - The same pkgsrc approach should work on NetBSD/aarch64.
