@@ -285,6 +285,9 @@ Copy the following patches into /usr/pkgsrc/lang/gcc15/patches/:
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_stdc_time.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_select.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_types.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_socket.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_pwd.d
+    patches/gcc15/patch-libphobos_src_std_process.d
 
 Then update the distinfo checksums:
 
@@ -301,8 +304,17 @@ a) Symbol renaming (pragma mangle) — these patches fix extern(C) bindings
   statvfs.d:    statvfs, fstatvfs
   stdc/time.d:  tzset
   select.d:     pselect, select
+  sys/socket.d: socket (-> __socket30)
+  pwd.d:        getpwnam, getpwuid, getpwent (-> __getpw*50)
 
-b) Type fixes (sys/types.d) — NetBSD's 64-bit time_t ABI transition also
+b) dirfd macro (std/process.d) — NetBSD defines dirfd() as a macro in
+   <dirent.h> (`#define dirfd(dirp) ((dirp)->dd_fd)`), not as a function.
+   There is no dirfd symbol in libc. The D runtime declares it as
+   extern(C), which causes an undefined reference at link time. The patch
+   provides a D implementation for NetBSD that reads dd_fd (the first
+   field of struct _dirdesc) directly via pointer cast.
+
+c) Type fixes (sys/types.d) — NetBSD's 64-bit time_t ABI transition also
    means the POSIX type aliases in druntime are wrong:
 
   time_t:       c_long -> long  (NetBSD: __int64_t, always 64-bit)
@@ -434,28 +446,12 @@ available by default on NetBSD, so we compile directly with gdmd.)
     enum dubVersion = "v1.41.0";
     EOF
 
-#### 3. Create the dirfd shim
-
-NetBSD defines `dirfd` as a macro, not a function. The D runtime declares
-it as `extern(C)`, causing an undefined reference at link time. A small C
-shim is needed:
-
-    cat > /tmp/netbsd_shims.c << 'EOF'
-    #include <dirent.h>
-    #undef dirfd
-    int dirfd(DIR *dirp) {
-        return dirp->dd_fd;
-    }
-    EOF
-    /usr/pkg/gcc15/bin/gcc -c /tmp/netbsd_shims.c -o /tmp/netbsd_shims.o
-
-#### 4. Compile DUB
+#### 3. Compile DUB
 
     /usr/pkg/gcc15/bin/gdmd \
         -of"bin/dub" -I"source" \
         -version=DubUseCurl -version=DubApplication \
         -g -O -w \
-        -L/tmp/netbsd_shims.o \
         -L-lcurl -L-L/usr/pkg/lib -L-R/usr/pkg/lib \
         @build-files.txt
 
@@ -465,7 +461,7 @@ runtime without setting LD_LIBRARY_PATH.
 Linker warnings about compatibility references to socket() and getpwuid()
 are cosmetic and do not affect functionality.
 
-#### 5. Install and verify
+#### 4. Install and verify
 
     # As root:
     cp bin/dub /usr/pkg/gcc15/bin/dub
@@ -475,12 +471,10 @@ are cosmetic and do not affect functionality.
 
 ### Known issues (gdmd/DUB)
 
-- The `dirfd` shim is needed because NetBSD's dirent.h defines dirfd as a
-  macro rather than a function. This affects any D program that uses
-  std.process (which internally calls dirfd via the D runtime).
-- The socket() and getpwuid() linker warnings are the same NetBSD ABI
-  rename issue described in the libphobos patches section. They are cosmetic
-  for DUB's use case.
+- All libphobos patches (step 6) must be applied and libphobos rebuilt
+  before compiling DUB. The dirfd, socket, and getpwuid patches are
+  particularly relevant — without them DUB will fail to link (dirfd) or
+  produce linker warnings (socket, getpwuid).
 - DUB requires libcurl (install via pkgsrc: `cd /usr/pkgsrc/www/curl && make install`).
 - bash is not installed by default on NetBSD, so the DUB build.sh script
   cannot be used directly. The gdmd invocation above bypasses it.
