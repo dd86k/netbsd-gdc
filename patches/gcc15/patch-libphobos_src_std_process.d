@@ -1,32 +1,28 @@
 $NetBSD$
 
-NetBSD defines dirfd() as a macro in <dirent.h>, not as a function.
-There is no dirfd symbol in libc. Provide a D implementation that
-reads dd_fd (the first field of struct _dirdesc) directly.
+Replace inline dirfd declaration with import from core.sys.posix.dirent,
+where the proper platform-aware definition now lives.
 
 --- libphobos/src/std/process.d.orig	2025-07-02 02:58:14.000000000 +0000
 +++ libphobos/src/std/process.d
-@@ -1048,9 +1048,20 @@
+@@ -1029,15 +1029,12 @@
+                     void fallback (int lowfd)
+                     {
+-                        import core.sys.posix.dirent : dirent, opendir, readdir, closedir, DIR;
++                        import core.sys.posix.dirent : dirfd, dirent, opendir, readdir, closedir, DIR;
+                         import core.sys.posix.unistd : close;
+                         import core.sys.posix.stdlib : atoi, malloc, free;
+                         import core.sys.posix.sys.resource : rlimit, getrlimit, RLIMIT_NOFILE;
+
+                         // Get the maximum number of file descriptors that could be open.
+                         rlimit r;
+                         if (getrlimit(RLIMIT_NOFILE, &r) != 0)
+                             abortOnError(forkPipeOut, InternalError.getrlimit, .errno);
 
                          immutable maxDescriptors = cast(int) r.rlim_cur;
 
 -                        // Missing druntime declaration
 -                        pragma(mangle, "dirfd")
 -                        extern(C) nothrow @nogc int dirfd(DIR* dir);
-+                        // dirfd: on NetBSD this is a macro, not a function,
-+                        // so provide a D implementation instead.
-+                        version (NetBSD)
-+                        {
-+                            static int dirfd(DIR* dir) nothrow @nogc
-+                            {
-+                                return *(cast(int*) dir);
-+                            }
-+                        }
-+                        else
-+                        {
-+                            pragma(mangle, "dirfd")
-+                            extern(C) nothrow @nogc int dirfd(DIR* dir);
-+                        }
-
+-
                          DIR* dir = null;
-
