@@ -28,6 +28,7 @@ Everything below is automated in scripts/ (POSIX sh, run as root on the
 target). The rest of this document is the reference for what they do and
 for recovering when a step goes wrong.
 
+    scripts/update-pkgsrc.sh      fetch or update /usr/pkgsrc over anon CVS
     scripts/prep.sh               mk.conf, pkgsrc-mods, patches, cwrappers
     scripts/stage0-gcc10.sh       stage0
     scripts/stage1-gcc12.sh       stage1
@@ -43,6 +44,29 @@ for the duration of the build (restored on exit, including on Ctrl-C).
 
 Overridable environment: PKGSRC, PKG_PREFIX, MKCONF, MAKE, PATCHES_DIR,
 DUB_VERSION, SKIP_CWRAPPERS.
+
+### Getting or updating the pkgsrc tree
+
+update-pkgsrc.sh wraps the anonymous CVS commands. With no tree at
+/usr/pkgsrc it checks one out (default branch pkgsrc-2025Q4); with a tree
+already there it updates it, optionally switching branch:
+
+    sh scripts/update-pkgsrc.sh                 # stay on the current branch
+    sh scripts/update-pkgsrc.sh pkgsrc-2026Q1   # switch to a quarterly branch
+    sh scripts/update-pkgsrc.sh current         # switch to HEAD
+    DRYRUN=1 sh scripts/update-pkgsrc.sh        # show what it would do
+
+For reference, that is:
+
+    export CVS_RSH=ssh
+    cd /usr && cvs -q -d anoncvs@anoncvs.NetBSD.org:/cvsroot \
+        checkout -r pkgsrc-2025Q4 -P pkgsrc
+    cd /usr/pkgsrc && cvs -q update -dP        # -r <branch> to switch, -A for HEAD
+
+The script reverts our pkgsrc edits from their .pristine copies before
+updating, so CVS has nothing to conflict with — re-run prep.sh afterwards
+to reapply them. Any half-finished work/ directory belongs to the old tree;
+'make clean' it before building again.
 
 ## Notes
 
