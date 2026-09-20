@@ -22,6 +22,28 @@ Stages:
 - Obviously, the more cores you throw at it, the faster it will compile
 - Tested with pkgsrc-2025Q4
 
+## Scripts
+
+Everything below is automated in scripts/ (POSIX sh, run as root on the
+target). The rest of this document is the reference for what they do and
+for recovering when a step goes wrong.
+
+    scripts/prep.sh               mk.conf, pkgsrc-mods, patches, cwrappers
+    scripts/stage0-gcc10.sh       stage0
+    scripts/stage1-gcc12.sh       stage1
+    scripts/stage2-gcc15.sh       final stage + the tests/ programs
+    scripts/post-install.sh       gdmd and DUB (needs network)
+    scripts/build-all.sh          prep + all three stages
+    scripts/rebuild-libphobos.sh  libphobos only, after a patch change
+
+prep.sh is idempotent and keeps a <file>.pristine copy of every pkgsrc file
+it edits. The stage scripts handle the expected first-make failure and the
+GDC wrapper symlink themselves, and move the LLVM libunwind headers aside
+for the duration of the build (restored on exit, including on Ctrl-C).
+
+Overridable environment: PKGSRC, PKG_PREFIX, MKCONF, MAKE, PATCHES_DIR,
+DUB_VERSION, SKIP_CWRAPPERS.
+
 ## Notes
 
 - If the process gets OOM'd, run 'make clean' and restart your build.
@@ -287,7 +309,13 @@ Copy the following patches into /usr/pkgsrc/lang/gcc15/patches/:
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_types.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_socket.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_pwd.d
+    patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_dirent.d
     patches/gcc15/patch-libphobos_src_std_process.d
+
+Most of this work is upstream in dlang/dmd (see dlang/dmd#22720) but not in
+pkgsrc, so a newer GCC tarball may already carry some of these fixes and the
+corresponding patch will then fail to apply. Drop that patch from the
+directory (or point PATCHES_DIR at a trimmed copy) and re-run prep.sh.
 
 Then update the distinfo checksums:
 

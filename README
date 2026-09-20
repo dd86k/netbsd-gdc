@@ -8,3 +8,4 @@ Structure:
 - patches/ contains patches for libphobos-libdruntime.
   - I have submitted patches to Druntime (see dlang/dmd#22720).
 - pkgsrc-mods/ contains modifications to the pkgsrc files.
+- scripts/ automates the HOWTO (run as root on the NetBSD target).
