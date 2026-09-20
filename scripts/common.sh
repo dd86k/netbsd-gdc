@@ -17,6 +17,9 @@ GDC15=${PKG_PREFIX}/gcc15/bin/gdc
 
 UNWIND_HEADERS="unwind.h __libunwind_config.h libunwind.h"
 
+# cwrappers installs only libexec/cwrappers/*-wrapper; there is no config file.
+CWRAPPERS_PROBE=${PKG_PREFIX}/libexec/cwrappers/cc-wrapper
+
 info() { echo ">>> $*"; }
 warn() { echo "!!! $*" >&2; }
 die() { echo "*** $*" >&2; exit 1; }
@@ -35,6 +38,10 @@ need_pkgdir() {
 
 need_gdc() {
 	[ -x "$1" ] || die "$1 missing; run the previous stage script first"
+}
+
+have_cwrappers() {
+	[ -x "$CWRAPPERS_PROBE" ]
 }
 
 # Rewrite a file through sed without relying on sed -i semantics.

@@ -146,12 +146,14 @@ done
 
 if [ -n "$SKIP_CWRAPPERS" ]; then
 	info "=== skipping pkgtools/cwrappers (SKIP_CWRAPPERS set)"
-elif [ -x "${PKG_PREFIX}/libexec/cwrappers/config" ]; then
+elif have_cwrappers; then
 	info "=== pkgtools/cwrappers already installed"
 else
 	info "=== pkgtools/cwrappers (required by gcc15)"
 	( cd "$PKGSRC/pkgtools/cwrappers" && $MAKE install ) ||
 		die "cwrappers failed to build"
+	have_cwrappers ||
+		die "cwrappers installed but $CWRAPPERS_PROBE is absent"
 fi
 
 info "prep done; now run stage0-gcc10.sh, stage1-gcc12.sh, stage2-gcc15.sh"

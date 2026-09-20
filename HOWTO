@@ -280,6 +280,11 @@ GCC 15 requires cwrappers:
     cd /usr/pkgsrc/pkgtools/cwrappers
     make install              # as root
 
+Verify: the package installs nine wrappers and nothing else, so check for
+one of them rather than for a config file.
+
+    ls /usr/pkg/libexec/cwrappers/cc-wrapper
+
 ### 2. Add gcc-d option to the gcc15 pkgsrc package
 
 Edit `/usr/pkgsrc/lang/gcc15/options.mk`:

@@ -25,7 +25,7 @@ need_pkgdir "$GCC15_DIR"
 need_gdc "$GDC12"
 grep -q 'Mgcc-d' "$GCC15_DIR/options.mk" || die "run prep.sh first"
 grep -q 'BOOT_LDFLAGS=.*-lgcc_eh' "$GCC15_DIR/Makefile" || die "run prep.sh first"
-[ -x "${PKG_PREFIX}/libexec/cwrappers/config" ] || die "pkgtools/cwrappers missing; run prep.sh"
+have_cwrappers || die "pkgtools/cwrappers missing; run prep.sh"
 PATCHES_DIR=${PATCHES_DIR:-$REPO/patches/gcc15}
 for p in "$PATCHES_DIR"/patch-*; do
 	b=$(basename "$p")
