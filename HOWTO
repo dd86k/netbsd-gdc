@@ -56,12 +56,23 @@ already there it updates it, optionally switching branch:
     sh scripts/update-pkgsrc.sh current         # switch to HEAD
     DRYRUN=1 sh scripts/update-pkgsrc.sh        # show what it would do
 
+Updates are scoped to what this port touches — mk, lang/gcc10, lang/gcc12,
+lang/gcc15 and pkgtools/cwrappers — which is far quicker than the whole
+tree. Override with UPDATE_PATHS, or FULL=1 for everything. Switching
+branch always updates the whole tree, since the sticky tag is per directory
+and a half-switched tree builds nothing. cvs runs verbose (a line per
+directory, as a progress meter); QUIET=1 passes -q.
+
+A first checkout is always the full tree: gcc's build dependencies pull in
+gmp, mpfr, gettext, perl, gmake and their own dependencies recursively, so
+a gcc-only tree cannot build.
+
 For reference, that is:
 
     export CVS_RSH=ssh
-    cd /usr && cvs -q -d anoncvs@anoncvs.NetBSD.org:/cvsroot \
+    cd /usr && cvs -d anoncvs@anoncvs.NetBSD.org:/cvsroot \
         checkout -r pkgsrc-2025Q4 -P pkgsrc
-    cd /usr/pkgsrc && cvs -q update -dP        # -r <branch> to switch, -A for HEAD
+    cd /usr/pkgsrc && cvs update -dP lang/gcc15 mk   # -r <branch> to switch, -A for HEAD
 
 The script reverts our pkgsrc edits from their .pristine copies before
 updating, so CVS has nothing to conflict with — re-run prep.sh afterwards
