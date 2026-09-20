@@ -118,6 +118,16 @@ build_with_gdc() {
 	die "$_pkgdir still fails after $((_try - 1)) attempts"
 }
 
+clean_pkg() {
+	need_pkgdir "$1"
+	if [ ! -d "$1/work" ]; then
+		info "$1 has no work dir, nothing to clean"
+		return 0
+	fi
+	info "make clean in $1"
+	( cd "$1" && $MAKE clean ) || die "make clean failed in $1"
+}
+
 write_hello() {
 	cat > /tmp/hello.d <<'EOF'
 import std.stdio;

@@ -1,6 +1,8 @@
 #!/bin/sh
 # Stage 0: build GDC 10 from pkgsrc. GCC 10 is the last release whose D
 # frontend still builds with a C++ compiler alone, so nothing bootstraps it.
+#
+#   stage0-gcc10.sh [build|clean]
 set -e
 
 SCRIPTS=$(cd "$(dirname "$0")" && pwd)
@@ -8,6 +10,16 @@ SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 
 need_netbsd
 need_root
+
+case ${1:-build} in
+build) ;;
+clean)
+	clean_pkg "$GCC10_DIR"
+	exit 0
+	;;
+*) die "usage: $0 [build|clean]" ;;
+esac
+
 need_pkgdir "$GCC10_DIR"
 grep -q 'Mgcc-d' "$GCC10_DIR/options.mk" || die "run prep.sh first"
 

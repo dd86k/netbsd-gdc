@@ -1,6 +1,8 @@
 #!/bin/sh
 # Final stage: build GDC 15 from pkgsrc, bootstrapped with GDC 12, including
 # the libphobos patches for NetBSD's renamed libc symbols.
+#
+#   stage2-gcc15.sh [build|clean]
 set -e
 
 SCRIPTS=$(cd "$(dirname "$0")" && pwd)
@@ -9,6 +11,16 @@ REPO=$(dirname "$SCRIPTS")
 
 need_netbsd
 need_root
+
+case ${1:-build} in
+build) ;;
+clean)
+	clean_pkg "$GCC15_DIR"
+	exit 0
+	;;
+*) die "usage: $0 [build|clean]" ;;
+esac
+
 need_pkgdir "$GCC15_DIR"
 need_gdc "$GDC12"
 grep -q 'Mgcc-d' "$GCC15_DIR/options.mk" || die "run prep.sh first"

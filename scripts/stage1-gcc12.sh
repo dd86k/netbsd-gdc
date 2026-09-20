@@ -1,5 +1,7 @@
 #!/bin/sh
 # Stage 1: build GDC 12 from pkgsrc, bootstrapped with GDC 10.
+#
+#   stage1-gcc12.sh [build|clean]
 set -e
 
 SCRIPTS=$(cd "$(dirname "$0")" && pwd)
@@ -7,6 +9,16 @@ SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 
 need_netbsd
 need_root
+
+case ${1:-build} in
+build) ;;
+clean)
+	clean_pkg "$GCC12_DIR"
+	exit 0
+	;;
+*) die "usage: $0 [build|clean]" ;;
+esac
+
 need_pkgdir "$GCC12_DIR"
 need_gdc "$GDC10"
 grep -q 'Mgcc-d' "$GCC12_DIR/options.mk" || die "run prep.sh first"

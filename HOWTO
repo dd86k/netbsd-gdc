@@ -30,11 +30,11 @@ for recovering when a step goes wrong.
 
     scripts/update-pkgsrc.sh      fetch or update /usr/pkgsrc over anon CVS
     scripts/prep.sh               mk.conf, pkgsrc-mods, patches, cwrappers
-    scripts/stage0-gcc10.sh       stage0
-    scripts/stage1-gcc12.sh       stage1
-    scripts/stage2-gcc15.sh       final stage + the tests/ programs
+    scripts/stage0-gcc10.sh       stage0            [build|clean]
+    scripts/stage1-gcc12.sh       stage1            [build|clean]
+    scripts/stage2-gcc15.sh       final stage + tests/    [build|clean]
     scripts/post-install.sh       gdmd and DUB (needs network)
-    scripts/build-all.sh          prep + all three stages
+    scripts/build-all.sh          prep + all three stages   [build|clean]
     scripts/rebuild-libphobos.sh  libphobos only, after a patch change
 
 prep.sh is idempotent and keeps a <file>.pristine copy of every pkgsrc file
@@ -79,10 +79,31 @@ updating, so CVS has nothing to conflict with — re-run prep.sh afterwards
 to reapply them. Any half-finished work/ directory belongs to the old tree;
 'make clean' it before building again.
 
+### Cleaning up after a failure
+
+Every stage script takes an optional build|clean argument; clean runs
+'make clean' on that stage's package, which drops its work directory:
+
+    sh scripts/stage0-gcc10.sh clean
+    sh scripts/stage1-gcc12.sh clean
+    sh scripts/stage2-gcc15.sh clean
+    sh scripts/build-all.sh clean    # all three
+
+A cleaned stage starts from scratch, but prep.sh's edits and patches live in
+the pkgsrc tree, not in work/, so they survive. The other useful pkgsrc
+targets, run by hand in a package directory:
+
+    make clean                     # remove work/
+    make clean CLEANDEPENDS=yes    # and the dependencies' work dirs
+    make distclean                 # clean + delete the fetched distfiles
+    make checksum                  # fetch if needed, verify against distinfo
+    make makepatchsum              # regenerate the distinfo patch checksums
+    make deinstall                 # remove the installed package
+
 ## Notes
 
 - If the process gets OOM'd, run 'make clean' and restart your build.
-  You will have to redo your symlinks.
+  You will have to redo your symlinks — the stage scripts do that for you.
 
 ## Stage 0: Building GDC 10 from pkgsrc
 
