@@ -17,8 +17,9 @@ Stages:
 - NetBSD 10 or 11 amd64; the pkgsrc branch matters more than the OS release
 - pkgsrc tree at /usr/pkgsrc (comes with NetBSD)
 - pkgsrc bootstrapped (pkg_install, digest, etc.)
-- At least 8 GiB of available disk space, I believe
-- 4 GiB recommended, 6 GiB for final stage
+- At least 16 GiB of available disk space, I believe
+  'make clean' per stage can help a lot, everything before final leaves ~16 GiB
+- 4 GiB recommended, and at least 6 GiB for final stage
 - Obviously, the more cores you throw at it, the faster it will compile
 - Tested with pkgsrc-2026Q2
 
@@ -255,6 +256,11 @@ This installs GDC 12 to /usr/pkg/gcc12/bin/gdc.
 Test with a simple program:
 
     /usr/pkg/gcc12/bin/gdc /tmp/hello.d -o /tmp/hello12 && /tmp/hello12
+
+To reclaim some space, feel free to invoke 'make clean' in
+/usr/pkgsrc/lang/gcc12. Use 'make clean CLEANDEPENDS=yes' to also drop the
+gcc6 and gcc10 work directories, which are large and no longer needed once
+GDC 12 is installed.
 
 ### Known issues (stage1)
 
