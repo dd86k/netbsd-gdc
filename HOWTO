@@ -37,14 +37,24 @@ for recovering when a step goes wrong.
     scripts/post-install.sh       gdmd and DUB (needs network)
     scripts/build-all.sh          prep + all three stages   [build|clean]
     scripts/rebuild-libphobos.sh  libphobos only, after a patch change
+    scripts/gdc-env.sh            put GDC 15 on PATH (source it)   [|all]
 
 prep.sh is idempotent and keeps a <file>.pristine copy of every pkgsrc file
 it edits. The stage scripts handle the expected first-make failure and the
 GDC wrapper symlink themselves, and move the LLVM libunwind headers aside
 for the duration of the build (restored on exit, including on Ctrl-C).
 
+gdc-env.sh is the one script to source rather than run:
+
+    . scripts/gdc-env.sh         # links gdc, gdmd and dub into ~/.gdc15/bin
+    . scripts/gdc-env.sh all     # prepends /usr/pkg/gcc15/bin as-is
+
+The default exists because /usr/pkg/gcc15/bin also holds cc, gcc, g++ and
+cpp; putting it first makes GCC 15 the default compiler for everything,
+pkgsrc included. Use 'all' only when that is what you want.
+
 Overridable environment: PKGSRC, PKG_PREFIX, MKCONF, MAKE, PATCHES_DIR,
-DUB_VERSION, SKIP_CWRAPPERS.
+DUB_VERSION, SKIP_CWRAPPERS, SYSCTL, GDC_ENV_DIR.
 
 ### Getting or updating the pkgsrc tree
 
@@ -156,15 +166,19 @@ Test with a simple program:
 
 Note: You may see linker warnings about compatibility references to
 nanosleep/clock_gettime/time. These are caused by NetBSD's ABI renames
-(see "libphobos patches" in the final stage section). They do not affect
-functionality but can be fixed with equivalent pragma(mangle) patches.
+(see "libphobos patches" in the final stage section) and are not cosmetic:
+the compat stubs take a 32-bit time_t, so the value read back is wrong.
+Stage0 and stage1 only have to build the next compiler, which does not
+depend on these, so it is fine to leave them. The final stage fixes them
+with the libphobos patches.
 
 To reclaim some space, feel free to invoke 'make clean' in
 /usr/pkgsrc/lang/gcc10.
 
 ### Known issues (stage0)
 
-- The linker warnings about compatibility time functions are cosmetic.
+- The linker warnings about compatibility time functions are real but
+  harmless here; see the note above.
 - gcc10-libs must be installed alongside gcc10 (pkgsrc handles this
   automatically as a dependency).
 
@@ -262,7 +276,8 @@ installed.
 ### Known issues (stage1)
 
 - The same linker warnings about compatibility time functions appear as
-  with stage0 (see "libphobos patches" in the final stage section).
+  with stage0, with the same caveat (see "libphobos patches" in the final
+  stage section).
 - DWARF debug section warnings ("can't find .debug_ranges section") are
   cosmetic and do not affect functionality.
 - Older notes here claimed gcc6 gets dragged in as a transitive dependency
@@ -365,6 +380,14 @@ The fix adds `pragma(mangle, "...")` annotations to the NetBSD sections
 of libphobos/libdruntime, using the same technique already used for Musl
 in these files.
 
+Note that a missing mangle does not always warn. The linker only complains
+when the unsuffixed symbol is a "compatibility" alias it knows about; where
+the old entry point is still a plain exported symbol (ctime, gmtime,
+localtime and mktime in core.stdc.time) the link is silent and the only
+symptom is a wrong time value. Do not use the absence of warnings as
+evidence that the bindings are complete -- check with
+`nm -u <binary> | grep time` instead.
+
 Copy the following patches into /usr/pkgsrc/lang/gcc15/patches/:
 
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_time.d
@@ -376,6 +399,7 @@ Copy the following patches into /usr/pkgsrc/lang/gcc15/patches/:
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_sys_socket.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_pwd.d
     patches/gcc15/patch-libphobos_libdruntime_core_sys_posix_dirent.d
+    patches/gcc15/patch-libphobos_libdruntime_core_stdc_time.d
     patches/gcc15/patch-libphobos_src_std_process.d
 
 Most of this work is upstream in dlang/dmd (see dlang/dmd#22720) but not in
@@ -453,12 +477,23 @@ Restore the libunwind headers after install:
     /usr/pkg/gcc15/bin/gdc /tmp/hello.d -o /tmp/hello15 && /tmp/hello15
     # Hello from GDC on NetBSD!
 
+Then build tests/test_types.d and tests/test_extra.d, which exercise the
+renamed symbols. Both should link without warnings and print PASSED. To
+confirm the mangles actually took effect rather than merely going quiet:
+
+    nm -u /tmp/t_extra | grep time
+    # all hits suffixed: __time50, __gmtime_r50, __clock_gettime50, ...
+
+An unsuffixed `time` or `localtime` here means a patch did not apply.
+
 Note: If you have already built gcc15 without the libphobos patches, you
 can rebuild just libphobos without a full GCC rebuild:
 
-    cd /usr/pkgsrc/lang/gcc15/work/build/x86_64--netbsd/libphobos
-    gmake -j8 clean
-    gmake -j8
+    scripts/rebuild-libphobos.sh        # as root
+
+or by hand, in /usr/pkgsrc/lang/gcc15/work/build/*--netbsd/libphobos:
+
+    gmake -j$(sysctl -n hw.ncpu) clean && gmake -j$(sysctl -n hw.ncpu)
     gmake install             # as root
 
 ### Known issues (final stage)
