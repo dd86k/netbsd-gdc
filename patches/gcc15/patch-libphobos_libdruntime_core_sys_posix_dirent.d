@@ -5,12 +5,12 @@ in <dirent.h> (#define dirfd(dirp) ((dirp)->dd_fd)), not a function,
 so provide a D implementation that reads dd_fd (the first field of
 struct _dirdesc) directly.
 
---- libphobos/libdruntime/core/sys/posix/dirent.d.orig	2025-07-02 02:58:14.000000000 +0000
-+++ libphobos/libdruntime/core/sys/posix/dirent.d
-@@ -303,6 +303,21 @@
+--- libphobos/libdruntime/core/sys/posix/dirent.d.orig	2026-10-04 09:38:53.954677200 -0400
++++ libphobos/libdruntime/core/sys/posix/dirent.d	2026-10-04 09:38:53.961667753 -0400
+@@ -484,6 +484,22 @@
      void    rewinddir(DIR*);
  }
-
+ 
 +// Missing druntime declaration
 +version (NetBSD)
 +{
