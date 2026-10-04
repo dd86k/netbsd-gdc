@@ -10,7 +10,7 @@ need_netbsd
 need_root
 [ -x "$GMAKE" ] || die "$GMAKE missing"
 
-jobs=${MAKE_JOBS:-$(sysctl -n hw.ncpu)}
+jobs=${MAKE_JOBS:-$($SYSCTL -n hw.ncpu)}
 found=0
 for d in "$GCC15_DIR"/work/build/*--netbsd/libphobos; do
 	[ -d "$d" ] || continue

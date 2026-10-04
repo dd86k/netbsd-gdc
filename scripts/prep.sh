@@ -97,7 +97,7 @@ info "=== /etc/mk.conf"
 if grep -Eq "^MAKE_JOBS[+:]?=" "$MKCONF" 2>/dev/null; then
 	info "mk.conf already sets MAKE_JOBS"
 else
-	jobs=$(sysctl -n hw.ncpu)
+	jobs=$($SYSCTL -n hw.ncpu)
 	echo "MAKE_JOBS= $jobs" >> "$MKCONF"
 	info "mk.conf: MAKE_JOBS= $jobs"
 fi

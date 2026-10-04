@@ -6,6 +6,8 @@ PKG_PREFIX=${PKG_PREFIX:-/usr/pkg}
 MKCONF=${MKCONF:-/etc/mk.conf}
 MAKE=${MAKE:-make}
 GMAKE=${GMAKE:-${PKG_PREFIX}/bin/gmake}
+# Absolute: 'su root -c' keeps the caller's PATH, which lacks /sbin.
+SYSCTL=${SYSCTL:-/sbin/sysctl}
 
 GCC10_DIR=${PKGSRC}/lang/gcc10
 GCC12_DIR=${PKGSRC}/lang/gcc12
