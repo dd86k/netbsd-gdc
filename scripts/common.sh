@@ -89,7 +89,7 @@ restore_libunwind() {
 	done
 }
 
-# pkgsrc points the bootstrap 'gdc' wrapper at the build compiler (gcc6).
+# The bootstrap 'gdc' wrapper is missing or points at the wrong compiler.
 # 0 = repointed, 1 = wrapper dir not created yet, 2 = already correct.
 fix_gdc_wrapper() {
 	_w=$1/work/.gcc/bin/gdc

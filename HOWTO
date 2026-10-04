@@ -216,13 +216,13 @@ during the stage1 link. Edit `/usr/pkgsrc/lang/gcc12/Makefile`:
     make                  # as root; let it run until it fails
 
 The build will fail at configure with a message like "GDC is required to
-build d". This is expected — pkgsrc created a `gdc` wrapper symlink but
-pointed it at gcc6 (the build compiler) instead of gcc10.
+build d". This is expected — at that point the `gdc` toolchain wrapper is
+either missing or not pointing at gcc10.
 
 ### 4. Fix the GDC wrapper symlink (pkgsrc bug)
 
     ls -la /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
-    # It will point to /usr/pkg/gcc6/bin/gdc (wrong). Fix it:
+    # Missing, or pointing anywhere other than gcc10. Fix it:
     rm /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
     # It may not even exist, that's okay, but this is important:
     ln -s /usr/pkg/gcc10/bin/gdc /usr/pkgsrc/lang/gcc12/work/.gcc/bin/gdc
@@ -243,9 +243,6 @@ Restore the libunwind headers after install:
     mv /usr/pkg/include/__libunwind_config.h.bak /usr/pkg/include/__libunwind_config.h
     mv /usr/pkg/include/libunwind.h.bak /usr/pkg/include/libunwind.h
 
-Note: gcc6 will be built as a transitive dependency (from gcc10's
-buildlink3.mk). This adds significant build time but is automatic.
-
 This installs GDC 12 to /usr/pkg/gcc12/bin/gdc.
 
 ### 6. Verify
@@ -259,8 +256,8 @@ Test with a simple program:
 
 To reclaim some space, feel free to invoke 'make clean' in
 /usr/pkgsrc/lang/gcc12. Use 'make clean CLEANDEPENDS=yes' to also drop the
-gcc6 and gcc10 work directories, which are large and no longer needed once
-GDC 12 is installed.
+gcc10 work directory, which is large and no longer needed once GDC 12 is
+installed.
 
 ### Known issues (stage1)
 
@@ -268,8 +265,10 @@ GDC 12 is installed.
   with stage0 (see "libphobos patches" in the final stage section).
 - DWARF debug section warnings ("can't find .debug_ranges section") are
   cosmetic and do not affect functionality.
-- The gcc6 transitive build dependency may fail to fetch isl-0.14.tar.bz2
-  from some mirrors; pkgsrc will retry alternate mirrors automatically.
+- Older notes here claimed gcc6 gets dragged in as a transitive dependency
+  of gcc10's buildlink3.mk, and that its isl-0.14 distfile is hard to
+  fetch. Neither happened on pkgsrc-2026Q2: gcc12's bootstrap dependency
+  resolves straight to the installed gcc10, and lang/gcc6 is never built.
 
 ## Final Stage: Building GDC 15 from pkgsrc
 
@@ -426,11 +425,11 @@ c) Type fixes (sys/types.d) — NetBSD's 64-bit time_t ABI transition also
     cd /usr/pkgsrc/lang/gcc15
     make                      # as root; will fail at configure
 
-The build fails because pkgsrc creates a `gdc` wrapper symlink pointing
-at gcc6 (the build compiler) instead of gcc12. Fix it:
+The build fails because the `gdc` toolchain wrapper is missing or does not
+point at gcc12. Fix it:
 
     ls -la /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
-    # It will point to /usr/pkg/gcc6/bin/gdc (wrong). Fix it:
+    # Missing, or pointing anywhere other than gcc12. Fix it:
     rm /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
     ln -s /usr/pkg/gcc12/bin/gdc /usr/pkgsrc/lang/gcc15/work/.gcc/bin/gdc
 
