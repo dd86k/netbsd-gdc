@@ -14,13 +14,13 @@ Stages:
 
 ## Prerequisites
 
-- NetBSD 10 amd64
+- NetBSD 10 or 11 amd64; the pkgsrc branch matters more than the OS release
 - pkgsrc tree at /usr/pkgsrc (comes with NetBSD)
 - pkgsrc bootstrapped (pkg_install, digest, etc.)
 - At least 8 GiB of available disk space, I believe
 - 4 GiB recommended, 6 GiB for final stage
 - Obviously, the more cores you throw at it, the faster it will compile
-- Tested with pkgsrc-2025Q4
+- Tested with pkgsrc-2026Q2
 
 ## Scripts
 
@@ -48,11 +48,11 @@ DUB_VERSION, SKIP_CWRAPPERS.
 ### Getting or updating the pkgsrc tree
 
 update-pkgsrc.sh wraps the anonymous CVS commands. With no tree at
-/usr/pkgsrc it checks one out (default branch pkgsrc-2025Q4); with a tree
+/usr/pkgsrc it checks one out (default branch pkgsrc-2026Q2); with a tree
 already there it updates it, optionally switching branch:
 
     sh scripts/update-pkgsrc.sh                 # stay on the current branch
-    sh scripts/update-pkgsrc.sh pkgsrc-2026Q1   # switch to a quarterly branch
+    sh scripts/update-pkgsrc.sh pkgsrc-2026Q3   # switch to a quarterly branch
     sh scripts/update-pkgsrc.sh current         # switch to HEAD
     DRYRUN=1 sh scripts/update-pkgsrc.sh        # show what it would do
 
@@ -71,7 +71,7 @@ For reference, that is:
 
     export CVS_RSH=ssh
     cd /usr && cvs -d anoncvs@anoncvs.NetBSD.org:/cvsroot \
-        checkout -r pkgsrc-2025Q4 -P pkgsrc
+        checkout -r pkgsrc-2026Q2 -P pkgsrc
     cd /usr/pkgsrc && cvs update -dP lang/gcc15 mk   # -r <branch> to switch, -A for HEAD
 
 The script reverts our pkgsrc edits from their .pristine copies before

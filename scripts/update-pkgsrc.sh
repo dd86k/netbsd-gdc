@@ -2,7 +2,7 @@
 # Fetch or update the pkgsrc tree over anonymous CVS.
 #
 #   update-pkgsrc.sh                 update, staying on the current branch
-#   update-pkgsrc.sh pkgsrc-2025Q4   update and switch to that quarterly branch
+#   update-pkgsrc.sh pkgsrc-2026Q2   update and switch to that quarterly branch
 #   update-pkgsrc.sh current         update and switch to HEAD
 #
 # Updates are scoped to the directories this port touches; FULL=1 updates the
@@ -17,7 +17,7 @@ SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 . "$SCRIPTS/common.sh"
 
 BRANCH=${1:-}
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-pkgsrc-2025Q4}
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-pkgsrc-2026Q2}
 ANONCVS=${ANONCVS:-anoncvs@anoncvs.NetBSD.org:/cvsroot}
 UPDATE_PATHS=${UPDATE_PATHS:-"mk lang/gcc10 lang/gcc12 lang/gcc15 pkgtools/cwrappers"}
 CVS_RSH=${CVS_RSH:-ssh}

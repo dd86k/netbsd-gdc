@@ -1,7 +1,8 @@
 This repository is work on progress on how to compile GDC, the GNU D Compiler,
 on NetBSD 10.
 
-Tested on amd64 with pkgsrc-2025Q4.
+Tested on amd64 with pkgsrc-2026Q2, on NetBSD 10 and 11.
+The pkgsrc branch matters more here than the NetBSD release.
 
 Structure:
 - HOWTO contains the instructions.
